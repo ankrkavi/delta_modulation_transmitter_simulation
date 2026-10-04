@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delta Modulation Transmitter Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="eyebrow">COMMUNICATION SYSTEMS • DIGITAL MODULATION</div>
+      <h1>Delta Modulation <span>Transmitter</span></h1>
+      <p>Interactive sample-by-sample simulation of analog input → comparator → 1-bit quantizer → integrator → feedback.</p>
+    </div>
+    <div class="status" id="statusBadge">READY</div>
+  </header>
+
+  <section class="controls card">
+    <div class="section-title"><span>⚙</span> Simulation Controls</div>
+    <div class="control-grid">
+      <label>Signal Type
+        <select id="signalType">
+          <option value="sine">Sine</option>
+          <option value="triangle">Triangle</option>
+          <option value="square">Square</option>
+        </select>
+      </label>
+      <label>Amplitude <b id="ampVal">1.00 V</b>
+        <input id="amplitude" type="range" min="0.2" max="2" step="0.05" value="1">
+      </label>
+      <label>Input Frequency <b id="freqVal">2 Hz</b>
+        <input id="frequency" type="range" min="0.5" max="8" step="0.5" value="2">
+      </label>
+      <label>Sampling Frequency <b id="fsVal">40 Hz</b>
+        <input id="sampling" type="range" min="10" max="200" step="5" value="40">
+      </label>
+      <label>Step Size Δ <b id="stepVal">0.15 V</b>
+        <input id="stepSize" type="range" min="0.02" max="0.6" step="0.01" value="0.15">
+      </label>
+      <label>Samples <b id="samplesVal">80</b>
+        <input id="samples" type="range" min="20" max="200" step="10" value="80">
+      </label>
+      <label>Animation Speed <b id="speedVal">120 ms</b>
+        <input id="speed" type="range" min="30" max="500" step="10" value="120">
+      </label>
+    </div>
+    <div class="buttons">
+      <button id="start" class="primary">▶ Start</button>
+      <button id="pause">Ⅱ Pause</button>
+      <button id="step">⏭ Step</button>
+      <button id="reset">↻ Reset</button>
+    </div>
+    <div class="presets">
+      <span>Experiments:</span>
+      <button data-preset="normal">Normal</button>
+      <button data-preset="overload">Slope Overload</button>
+      <button data-preset="granular">Granular Noise</button>
+      <button data-preset="highfs">High Sampling</button>
+      <button data-preset="lowfs">Low Sampling</button>
+      <button data-preset="smalldelta">Small Δ</button>
+      <button data-preset="largedelta">Large Δ</button>
+    </div>
+  </section>
+
+  <section class="diagram card">
+    <div class="section-title"><span>⟲</span> Delta Modulation Transmitter</div>
+    <div class="flow">
+      <div class="block" id="blockInput"><strong>Analog Input</strong><small>x(t)</small></div>
+      <div class="arrow">→</div>
+      <div class="block" id="blockComp"><strong>Comparator</strong><small>x[n] vs x̂[n−1]</small></div>
+      <div class="arrow">→</div>
+      <div class="block" id="blockQuant"><strong>1-bit Quantizer</strong><small>UP / DOWN</small></div>
+      <div class="arrow">→</div>
+      <div class="block" id="blockInt"><strong>Integrator</strong><small>± Δ</small></div>
+      <div class="arrow">→</div>
+      <div class="block output"><strong>Bitstream</strong><small id="liveBit">—</small></div>
+    </div>
+    <div class="feedback">↖ <span>Feedback: staircase approximation x̂[n] returns to the comparator</span></div>
+  </section>
+
+  <section class="visuals">
+    <div class="chart card">
+      <div class="chart-head"><h2>1. Original Analog Input</h2><span id="sampleTime">t = 0.000 s</span></div>
+      <canvas id="inputCanvas"></canvas>
+    </div>
+    <div class="chart card">
+      <div class="chart-head"><h2>2. Sampled Signal</h2><span>Discrete samples</span></div>
+      <canvas id="sampleCanvas"></canvas>
+    </div>
+    <div class="chart card">
+      <div class="chart-head"><h2>3. Staircase Approximation</h2><span>Reconstructed x̂[n]</span></div>
+      <canvas id="stairCanvas"></canvas>
+    </div>
+    <div class="chart card">
+      <div class="chart-head"><h2>4. Delta Bitstream</h2><span>1 = UP • 0 = DOWN</span></div>
+      <canvas id="bitCanvas"></canvas>
+      <div id="bitString" class="bit-string">—</div>
+    </div>
+  </section>
+
+  <section class="lower">
+    <div class="explanation card">
+      <div class="section-title"><span>🧠</span> Sample-by-Sample Decision</div>
+      <div class="decision-grid">
+        <div><span>Sample</span><strong id="dSample">—</strong></div>
+        <div><span>Input x[n]</span><strong id="dInput">—</strong></div>
+        <div><span>Previous x̂</span><strong id="dPrev">—</strong></div>
+        <div><span>Comparison</span><strong id="dCompare">—</strong></div>
+        <div><span>Output Bit</span><strong id="dBit">—</strong></div>
+        <div><span>New x̂[n]</span><strong id="dNew">—</strong></div>
+      </div>
+      <div id="explanationText" class="explanation-text">
+        Press Start or Step to begin the transmitter simulation.
+      </div>
+    </div>
+
+    <div class="stats card">
+      <div class="section-title"><span>▦</span> Statistics</div>
+      <div class="stat-grid">
+        <div><span>Sampling Frequency</span><b id="sFs">—</b></div>
+        <div><span>Input Frequency</span><b id="sFreq">—</b></div>
+        <div><span>Amplitude</span><b id="sAmp">—</b></div>
+        <div><span>Step Δ</span><b id="sDelta">—</b></div>
+        <div><span>Bit Rate</span><b id="sBitRate">—</b></div>
+        <div><span>Generated Bits</span><b id="sBits">0</b></div>
+        <div><span>Average Error</span><b id="sAvgErr">—</b></div>
+        <div><span>Maximum Error</span><b id="sMaxErr">—</b></div>
+        <div><span>MSE</span><b id="sMse">—</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="analysis card">
+    <div class="section-title"><span>⚠</span> Distortion Analysis</div>
+    <div class="warnings">
+      <div id="overloadBox" class="warning neutral"><strong>Slope Overload</strong><span>Not detected</span></div>
+      <div id="granularBox" class="warning neutral"><strong>Granular Noise</strong><span>Not detected</span></div>
+    </div>
+  </section>
+
+  <section class="learning card">
+    <div class="learn-head">
+      <div>
+        <div class="section-title"><span>📘</span> Learning Mode</div>
+        <p>Delta Modulation sends the <b>direction of change</b>, not the absolute amplitude.</p>
+      </div>
+      <label class="switch"><input type="checkbox" id="learning"><span></span> Learning Mode</label>
+    </div>
+    <div id="formulaPanel" class="formula-panel hidden">
+      <div><b>If x[n] &gt; x̂[n−1]</b><br>b[n] = 1<br>x̂[n] = x̂[n−1] + Δ</div>
+      <div><b>Otherwise</b><br>b[n] = 0<br>x̂[n] = x̂[n−1] − Δ</div>
+      <div><b>Key idea</b><br>The feedback staircase becomes the reference for the next comparison.</div>
+    </div>
+  </section>
+
+  <footer>Delta Modulation Transmitter Simulator • HTML + CSS + Vanilla JavaScript • Educational use</footer>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
